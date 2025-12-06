@@ -132,6 +132,7 @@ class VerifyApplyModal(Modal, title="認証申請フォーム"):
         except:
             pass
 
+#認証申請承認&拒否ボタン
 class VerifyApprovalView(View):
     def __init__(self, user_id, name, inviter, message):
         super().__init__(timeout=None)
@@ -141,7 +142,7 @@ class VerifyApprovalView(View):
         self.message = message
                 
     @discord.ui.button(label="✅承認", style=discord.ButtonStyle.green)
-        async def approve(self, interaction: discord.Interaction, button: Button):
+    async def approve(self, interaction: discord.Interaction, button: Button):
         settings = load_setting()
         guild = interaction.guild
         user = guild.get_member(self.user_id)
@@ -155,27 +156,208 @@ class VerifyApprovalView(View):
             await user.add_roles(member_role)
                 
         await interaction.response.edit_message(
-            content=f"✅ {user.display_name} を承認しました。"
+            content=f"✅ {user.display_name} の認証申請を承認しました。", view=None
         )
-    try:
-        approve_embed = discord.Embed(
-            title="✅ 認証申請が承認されました",
-            description="メンバーロールが付与されました。",
-            color=discord.Color.green()
-        )
-        await user.send(embed=approve_embed)
-    except:
-        pass
+        try:
+            approve_embed = discord.Embed(
+                title="✅ 認証申請が承認されました",
+                description="メンバーロールが付与されました。",
+                color=discord.Color.green()
+            )
+            await user.send(embed=approve_embed)
+        except:
+            pass
         
-    if log_channel:
-        log_embed = discord.Embed(
-            title=f"✅ {user.mention} の認証申請が承認されました",
-            description=None,
-            color=discord.Color.green()
-        )
-        log_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
-        log_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
-        log_embed.add_field(name="管理者への一言(任意), value=message, inline=False)
-        log_embed.set_footer(text=f"担当者: {interaction.user.mention}")
+        if log_channel:
+            log_embed = discord.Embed(
+                title=f"✅ {user.mention} の認証申請が承認されました",
+                description=None,
+                color=discord.Color.green()
+            )
+            log_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
+            log_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
+            log_embed.add_field(name="管理者への一言(任意), value=message, inline=False)
+            log_embed.set_footer(text=f"担当者: {interaction.user.mention}")
         
-        await log_channel.send(embed=log_embed)
+            await log_channel.send(embed=log_embed)
+            
+    @discord.ui.button(label="❌拒否", style=discord.ButtonStyle.red)
+    async def deny(self, interaction: discord.Interaction, button: Button):
+        settings = load_settings()
+        guild = interaction.guild
+        user = guild.get_member(self.user_id)
+        log_channel = guild.get_channel(settings["log_channel"])
+        
+        await interaction.response.edit_message(
+            content=f"❌ {user.display_name} の認証申請を拒否しました。", view=None
+        )
+        
+        embed = discord.Embed(
+            title="❌ 認証申請が拒否されました",
+            description="申請内容を再度確認してください",
+            color=discord.Color.red()
+        )
+        try:
+            await user.send(embed=embed)
+        except:
+            pass
+            
+        if log_channel:
+            log_embed = discord.Embed(
+                title=f"❌ {user.mention} の認証申請を拒否しました",
+                description=None,
+                color=discord.Color.red()
+            )
+                
+            log_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
+            log_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
+            log_embed.add_field(name="管理者への一言(任意), value=message, inline=False)
+            log_embed.set_footer(text=f"担当者: {interaction.user.mention}")
+            
+            await log_channel.send(embed=log_embed)
+
+#認証チャンネル用Embedのボタン
+class VerifyMainView(View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        
+    @discord.ui.button(label="認証コード入力", style=discord.ButtonStyle.green)
+    async def code_input(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(CodeInputModal())
+        
+    @discord.ui.button(label="認証申請", style=discord.ButtonStyle.green)
+    async def apply(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(VerifyApplyModal())
+        
+#管理者チェック
+def admin_only(interaction: discord.Interaction):
+    return interaction.user.guild_permissions.administrator
+    
+#未承認ロール付与&入室通知
+@bot.event
+async def on_member_join(member):
+    settings = load_settings()
+    unverified_role_id = settings["unverified_role"]
+    
+    if unverified_role_id:
+        role = member.guild.get_role(unverified_role_id)
+        if role:
+            await member.add_roles(role)
+
+
+#/verifyrole メンバーロール付与設定
+@bot.tree.command(name="verifyrole", description="メンバーロールを設定")
+@app_commands.check(admin_only)
+async def verifyrole(interaction: discord.Interaction, role: discord.Role):
+    settings = load_settings()
+    settings["member_role"] = role.id
+    save_settings(settings)
+    
+    await interaction.response.send_message(
+        f"✅ メンバーロールを {role.mention} に設定しました。",
+        ephemeral=True
+    )
+
+#/unverifiedrole 未認証ロール付与設定
+@bot.tree.command(name="unverifiedrole", description="未認証ロールを設定")
+@app_commands.check(admin_only)
+async def unverifyrole(interaction: discord.Interaction, role: discord.Role):
+    settings = load_settings()
+    settings["unverified_role"] = role.id
+    save_settings(settings)
+    
+    await interaction.response.send_message(
+        f"✅ 未認証ロールを {role.mention} に設定しました。",
+        ephemeral=True
+    )
+
+#/verifycode 認証コード設定
+@bot.tree.command(name="verifycode", description="認証コードを設定")
+@app_commands.check(admin_only)
+async def verifycode(interaction: discord.Interaction, code: str):
+    settings = load_settings()
+    settings["verify_code"] = code
+    save_settings(settings)
+    
+    await interaction.response.send_message(
+        f"🔑 認証コードを **{code}** に設定しました",
+        ephemeral=True
+    )
+    
+#/verifyset 認証用Embed設置
+@bot.tree.command(name="verifyset", description="認証用Embedを設置します")
+@app_commands.check(admin_only)
+async def verifyset(interaction: discord.Interaction):
+    
+    settings = load_settings()
+    settings["verify_channel"] = interaction.channel.id
+    save_settings(settings)
+    
+    verify_embed = discord.Embed(
+        title="🔐 認証パネル",
+        description=(
+            "以下のボタンから認証を行ってください。\n"
+            "・認証コードを持っている場合は **認証コード入力**\n"
+            "・認証コードを持っていない場合は **認証申請**"
+        ),
+        color=discord.Color.orange()
+    )
+    
+    await interaction.response.send_message(
+        f"✅ このチャンネルに認証パネルを設置しました。",
+        ephemeral=True
+    )
+    
+    await interaction.channel.send(embed=verify_embed, view=VerifyMainView())
+
+#/settings botの設定一覧表示
+@bot.tree.command(name="settings", description="botの設定一覧を表示します")
+@app_commands.check(admin_only)
+async def settings(interaction: discord.Interaction):
+    
+    settings = load_settings()
+    
+    embed = discord.Embed(
+        title="⚙️ botの設定一覧",
+        description=None,
+        color=discord.Color.blue()
+    )
+    
+    verify_channel = settings.get("verify_channel")
+    embed.add_field(
+        name="🔐 認証チャンネル",
+        value=f"<#{verify_channel}>" if verify_channel else "未設定",
+        inline=False
+    )
+    member_role = settings.get("member_role")
+    embed.add_field(
+        name="✅ メンバーロール(認証済みロール),
+        value=f"<@&{member_role}>" if member_role else "未設定",
+        inline=False
+    )
+    unverified_role = settings.get("unverified_role")
+    embed.add_field(
+        name="🔒 未認証ロール",
+        value=f"<@&{unverified_role}>" if unverified_role else "未設定",
+        inline=False
+    )
+    verify_code = settings.get("verify_code")
+    embed.add_field(
+        name="🔑 認証コード",
+        value=f"`{verify_code}`" if verify_code else "未設定",
+        inline=False
+    )
+    apply_channel = settings.get("apply_channel")
+    embed.add_field(
+        name="📬 認証申請受信チャンネル",
+        value=f"<#{apply_channel}>" if apply_channel else "未設定",
+        inline=False
+    )
+    log_channel = settings.get("log_channel")
+    embed.add_field(
+        name="💻 認証ログチャンネル",
+        value=f"<#{log_channel}>" if log_channel else "未設定",
+        inline=False
+    )
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
