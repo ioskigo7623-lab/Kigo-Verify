@@ -4,3 +4,102 @@ from discord import app_commands
 from discord.ui import View, Button, InputText, Modal
 import json
 import os
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+DATA_FILE = "verify_settings.json"
+
+def load_settings():
+    if not os.path.exists(DATA_FILE):
+        save_settings({
+            "verify_code": None,
+            "verify_channel": None,
+            "apply_channel": None,
+            "log_channel": None,
+            "member_role": None,
+            "unverified_role: None
+        })
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_settings(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+
+settings = load_settings()
+
+intents = discord.Intents.dafault()
+intents.members = True
+bot = commands.Bot(command_prefix="?$", intents=intents)
+
+#認証コード入力モーダル
+class CodeInputModal(Modal, title="認証コードの入力"):
+    code = InputText(label="認証コードを入力してください")
+    
+    async def callback(self, interaction: discord.Interaction):
+        settings = load_settings()
+        verify_code = settings["verify_code"]
+        
+        member_role_id = settings.get("member_role")
+        unverified_role_id = settings.get("unverified_role")
+        guild = interaction.guild
+        member = guild.get_member(interaction.user.id)
+        
+        embed = discord.Embed()
+        embed.add_field(name="送信した認証コード", value=self.code.value, inline=False)
+        
+        if self.code.value != verify_code:
+            embed.title = "❌認証コードが違います。"
+            embed.color = discord.Color.red()
+            
+            try:
+                await interaction.user.send(embed=embed)
+            except:
+                pass
+            
+            return await interaction.response.send_message("❌認証コードが違います", ephemeral=True)
+            
+        embed.title = "✅認証コードで認証を完了しました。"
+        embed.color = discord.Color.green()
+        
+        try:
+            await interaction.user.send(embed=embed)
+        except:
+            pass
+        
+        try:
+            if unverified_role_id:
+                unverified_role = guild.get_role(unverified_role_id)
+                if unverified_role in member.roles:
+                    await member.remove_roles(unverified_role)
+                    
+            if member_role_id:
+                member_role = guild.get_role(member_role_id)
+                if member_role not in member.roles:
+                    await member.add_roles(member_role)
+        except Exception as e:
+            print(f"ロール付与エラー: {e}")
+            
+        return await interaction.response.send_message("✅認証が完了しました。", ephemeral=True)
+
+#認証申請フォーム
+class VerifyApplyModal(Modal, title="認証申請フォーム"):
+    name = InputText(label="あなたの名前を入力してください")
+    inviter = InputText(label="誰から招待されましたか？")
+    message = InputText(label="管理者への一言(任意)", required=False)
+    
+    async def callback(self, interaction: discord.Interaction):
+        settings = load_settings()
+        apply_channel_id = settings["apply_channel"]
+        
+        if not apply_channel_id:
+            return await interaction.response.send_message("管理側の認証申請設定が完了していません。サーバー管理者に問い合わせてください。", ephemeral=True)
+            
+        apply_channel = interaction.guild.get_channel(apply_channel_id)
+        
+        embed = discord.Embed(
+            title="🔐 認証申請",
+            description=f"ユーザー: {interaction.user.mention}\nID: `{interaction.user.id}`",
+            color=discord.Color.yellow()
+        )
+        embed.add_field(name="名前", value=self.name.value, inline=False)
+        
