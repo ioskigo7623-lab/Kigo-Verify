@@ -102,4 +102,27 @@ class VerifyApplyModal(Modal, title="認証申請フォーム"):
             color=discord.Color.yellow()
         )
         embed.add_field(name="名前", value=self.name.value, inline=False)
+        embed.add_field(name="招待者", value=self.inviter.value, inline=False)
+        embed.add_field(name="一言", value=self.message.value, inline=False)
         
+        await apply_channel.send(
+            embed=embed,
+            view=VerifyApprovalView(
+                interaction.user.id,
+                self.name.value,
+                self.inviter.value,
+                self.message.value or "(なし)"
+            )
+        )
+        
+        await interaction.response.send_message("📨 認証申請を送信しました。管理者の承認をお待ち下さい。", ephemeral=True)
+        
+        class VerifyApprovalView(View):
+            def __init__(self, user_id, name, inviter, message):
+                super().__init__(timeout=None)
+                self.user_id = user_id
+                self.name = name
+                self.inviter = inviter
+                self.message = message
+                
+            @discord.ui.button(label="✅承認", style=discord.ButtonStyle.green)
