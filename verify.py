@@ -117,12 +117,65 @@ class VerifyApplyModal(Modal, title="認証申請フォーム"):
         
         await interaction.response.send_message("📨 認証申請を送信しました。管理者の承認をお待ち下さい。", ephemeral=True)
         
-        class VerifyApprovalView(View):
-            def __init__(self, user_id, name, inviter, message):
-                super().__init__(timeout=None)
-                self.user_id = user_id
-                self.name = name
-                self.inviter = inviter
-                self.message = message
+        try:
+            dm_embed = discord.Embed(
+                title="📬 認証申請が完了しました",
+                description="管理者の承認をお待ち下さい。",
+                color=discord.Color.blue()
+            )
+            dm_embed.add_field(name="申請内容", value=None, inline=False)
+            dm_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
+            dm_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
+            dm_embed.add_field(name="管理者への一言(任意)", value=message, inline=False)
+
+            await interaction.user.send(embed=dm_embed)
+        except:
+            pass
+
+class VerifyApprovalView(View):
+    def __init__(self, user_id, name, inviter, message):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.name = name
+        self.inviter = inviter
+        self.message = message
                 
-            @discord.ui.button(label="✅承認", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="✅承認", style=discord.ButtonStyle.green)
+        async def approve(self, interaction: discord.Interaction, button: Button):
+        settings = load_setting()
+        guild = interaction.guild
+        user = guild.get_member(self.user_id)
+        unverified_role = guild.get_role(settings["unverified_role"])
+        member_role = guild.get_role(settings["member_role"])
+        log_channel = guild.get_channel(settings["log_channel"])
+                
+        if unverified_role in user.roles:
+            await user.remove_roles(unverified_role)
+        if member_role:
+            await user.add_roles(member_role)
+                
+        await interaction.response.edit_message(
+            content=f"✅ {user.display_name} を承認しました。"
+        )
+    try:
+        approve_embed = discord.Embed(
+            title="✅ 認証申請が承認されました",
+            description="メンバーロールが付与されました。",
+            color=discord.Color.green()
+        )
+        await user.send(embed=approve_embed)
+    except:
+        pass
+        
+    if log_channel:
+        log_embed = discord.Embed(
+            title=f"✅ {user.mention} の認証申請が承認されました",
+            description=None,
+            color=discord.Color.green()
+        )
+        log_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
+        log_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
+        log_embed.add_field(name="管理者への一言(任意), value=message, inline=False)
+        log_embed.set_footer(text=f"担当者: {interaction.user.mention}")
+        
+        await log_channel.send(embed=log_embed)
