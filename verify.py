@@ -361,3 +361,30 @@ async def settings(interaction: discord.Interaction):
     )
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+#ステータス切り替え
+@tasks.loop(seconds=15)
+async def presence_loop():
+    if not hasattr(presence_loop, "toggle"):
+        presence_loop.toggle = False
+    presence_loop.toggle = not presence_loop.toggle
+    if presence_loop.toggle:
+        await bot.change_presence(
+            activity=discord.Game("🔐 認証システム作動中･･･")
+        )
+    else:
+        ping = round(bot.latency * 1000)
+        await bot.change_presence(
+            activity=discord.Game(f"Verify System┃Ping {ping}ms")
+        )
+
+#起動
+@bot.event
+async def on_ready():
+    print(f"✅ ログイン完了: {bot.user}")
+    await bot.tree.sync()
+    print("✅ スラッシュコマンド同期完了")
+    if not presence_loop.is_running():
+        presence_loop.start()
+
+bot.run(TOKEN)
