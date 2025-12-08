@@ -17,7 +17,7 @@ def load_settings():
             "apply_channel": None,
             "log_channel": None,
             "member_role": None,
-            "unverified_role: None
+            "unverified_role": None
         })
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -28,7 +28,7 @@ def save_settings(data):
 
 settings = load_settings()
 
-intents = discord.Intents.dafault()
+intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="?$", intents=intents)
 
@@ -125,9 +125,9 @@ class VerifyApplyModal(Modal, title="認証申請フォーム"):
                 color=discord.Color.blue()
             )
             dm_embed.add_field(name="申請内容", value=None, inline=False)
-            dm_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
-            dm_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
-            dm_embed.add_field(name="管理者への一言(任意)", value=message, inline=False)
+            dm_embed.add_field(name="あなたの名前を入力してください", value=self.name.value, inline=False)
+            dm_embed.add_field(name="誰から招待されましたか？", value=self.inviter.value, inline=False)
+            dm_embed.add_field(name="管理者への一言(任意)", value=self.message.value, inline=False)
 
             await interaction.user.send(embed=dm_embed)
         except:
@@ -144,7 +144,7 @@ class VerifyApprovalView(View):
                 
     @discord.ui.button(label="✅承認", style=discord.ButtonStyle.green)
     async def approve(self, interaction: discord.Interaction, button: Button):
-        settings = load_setting()
+        settings = load_settings()
         guild = interaction.guild
         user = guild.get_member(self.user_id)
         unverified_role = guild.get_role(settings["unverified_role"])
@@ -210,9 +210,9 @@ class VerifyApprovalView(View):
                 color=discord.Color.red()
             )
                 
-            log_embed.add_field(name="あなたの名前を入力してください", value=name, inline=False)
-            log_embed.add_field(name="誰から招待されましたか？", value=inviter, inline=False)
-            log_embed.add_field(name="管理者への一言(任意), value=message, inline=False)
+            log_embed.add_field(name="あなたの名前を入力してください", value=self.name, inline=False)
+            log_embed.add_field(name="誰から招待されましたか？", value=self.inviter, inline=False)
+            log_embed.add_field(name="管理者への一言(任意), value=self.message, inline=False)
             log_embed.set_footer(text=f"担当者: {interaction.user.mention}")
             
             await log_channel.send(embed=log_embed)
@@ -332,7 +332,7 @@ async def settings(interaction: discord.Interaction):
     )
     member_role = settings.get("member_role")
     embed.add_field(
-        name="✅ メンバーロール(認証済みロール),
+        name="✅ メンバーロール(認証済みロール)",
         value=f"<@&{member_role}>" if member_role else "未設定",
         inline=False
     )
